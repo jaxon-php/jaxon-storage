@@ -1,7 +1,7 @@
 [![Build Status](https://github.com/jaxon-php/jaxon-storage/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/jaxon-php/jaxon-storage/actions)
 [![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/jaxon-php/jaxon-storage/badges/quality-score.png?b=main)](https://scrutinizer-ci.com/g/jaxon-php/jaxon-storage/?branch=main)
-[![StyleCI](https://styleci.io/repos/491279814/shield?branch=main)](https://styleci.io/repos/491279814)
-[![codecov](https://codecov.io/gh/jaxon-php/jaxon-storage/branch/main/graph/badge.svg?token=8KD4KLQTXO)](https://codecov.io/gh/jaxon-php/jaxon-storage)
+[![StyleCI](https://styleci.io/repos/1109084794/shield?branch=main)](https://styleci.io/repos/1109084794)
+[![codecov](https://codecov.io/gh/jaxon-php/jaxon-storage/graph/badge.svg?token=OFyT9WzVxt)](https://codecov.io/gh/jaxon-php/jaxon-storage)
 
 [![Latest Stable Version](https://poser.pugx.org/jaxon-php/jaxon-storage/v/stable)](https://packagist.org/packages/jaxon-php/jaxon-storage)
 [![Total Downloads](https://poser.pugx.org/jaxon-php/jaxon-storage/downloads)](https://packagist.org/packages/jaxon-php/jaxon-storage)
@@ -120,7 +120,7 @@ They are provided in separate packages, which need to be installed first.
 #### AWS S3 file system adapter
 
 ```php
-$manager->registerAdapter('aws-s3', function(string $sRootDir, array $aOptions) {
+$manager->register('aws-s3', function(string $sRootDir, array $aOptions) {
     /** @var \Aws\S3\S3ClientInterface $client */
     $client = new \Aws\S3\S3Client($aOptions['client'] ?? []);
     return new \League\Flysystem\AwsS3V3\AwsS3V3Adapter($client, $aOptions['bucket'] ?? '', $sRootDir);
@@ -130,7 +130,7 @@ $manager->registerAdapter('aws-s3', function(string $sRootDir, array $aOptions) 
 #### Async AWS S3 file system adapter
 
 ```php
-$manager->registerAdapter('async-aws-s3', function(string $sRootDir, array $aOptions) {
+$manager->register('async-aws-s3', function(string $sRootDir, array $aOptions) {
     $client = isset($aOptions['client']) ? new \AsyncAws\S3\S3Client($aOptions['client']) : new \AsyncAws\S3\S3Client();
     return new \League\Flysystem\AsyncAwsS3\AsyncAwsS3Adapter($client, $aOptions['bucket'] ?? '', $sRootDir);
 });
@@ -139,7 +139,7 @@ $manager->registerAdapter('async-aws-s3', function(string $sRootDir, array $aOpt
 #### Google Cloud file system adapter
 
 ```php
-$manager->registerAdapter('google-cloud', function(string $sRootDir, array $aOptions) {
+$manager->register('google-cloud', function(string $sRootDir, array $aOptions) {
     $storageClient = new \Google\Cloud\Storage\StorageClient($aOptions['client'] ?? []);
     $bucket = $storageClient->bucket($aOptions['bucket'] ?? '');
     return new \League\Flysystem\AzureBlobStorage\GoogleCloudStorageAdapter($bucket, $sRootDir);
@@ -149,7 +149,7 @@ $manager->registerAdapter('google-cloud', function(string $sRootDir, array $aOpt
 #### Microsoft Azure file system adapter
 
 ```php
-$manager->registerAdapter('azure-blob', function(string $sRootDir, array $aOptions) {
+$manager->register('azure-blob', function(string $sRootDir, array $aOptions) {
     $client = \MicrosoftAzure\Storage\Blob\BlobRestProxy::createBlobService($aOptions['dsn']);
     return new \League\Flysystem\AzureBlobStorage\AzureBlobStorageAdapter($client, $aOptions['container'], $sRootDir);
 });
@@ -158,7 +158,7 @@ $manager->registerAdapter('azure-blob', function(string $sRootDir, array $aOptio
 #### FTP file system adapter
 
 ```php
-$manager->registerAdapter('ftp', function(string $sRootDir, array $aOptions) {
+$manager->register('ftp', function(string $sRootDir, array $aOptions) {
     $aOptions['root'] = $sRootDir;
     $xOptions = \League\Flysystem\Ftp\FtpConnectionOptions::fromArray($aOptions);
     return new \League\Flysystem\Ftp\FtpAdapter($xOptions);
@@ -168,7 +168,7 @@ $manager->registerAdapter('ftp', function(string $sRootDir, array $aOptions) {
 #### SFTP V2 file system adapter
 
 ```php
-$manager->registerAdapter('sftp-v2', function(string $sRootDir, array $aOptions) {
+$manager->register('sftp-v2', function(string $sRootDir, array $aOptions) {
     $provider = new \League\Flysystem\PhpseclibV2\SftpConnectionProvider(...$aOptions);
     return new \League\Flysystem\PhpseclibV2\SftpAdapter($provider, $sRootDir);
 });
@@ -177,7 +177,7 @@ $manager->registerAdapter('sftp-v2', function(string $sRootDir, array $aOptions)
 #### SFTP V3 file system adapter
 
 ```php
-$manager->registerAdapter('sftp-v3', function(string $sRootDir, array $aOptions) {
+$manager->register('sftp-v3', function(string $sRootDir, array $aOptions) {
     $provider = new \League\Flysystem\PhpseclibV3\SftpConnectionProvider(...$aOptions);
     return new \League\Flysystem\PhpseclibV3\SftpAdapter($provider, $sRootDir);
 });
