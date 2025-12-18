@@ -46,4 +46,14 @@ function register()
     };
 }
 
+/**
+ * Get the storage manager
+ *
+ * @return StorageManager
+ */
+function storage(): StorageManager
+{
+    return jaxon()->di()->g(StorageManager::class);
+}
+
 register();
