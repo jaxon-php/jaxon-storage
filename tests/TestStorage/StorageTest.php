@@ -2,7 +2,7 @@
 
 namespace Jaxon\Storage\Tests\TestStorage;
 
-use Jaxon\Exception\RequestException;
+use Jaxon\Storage\Exception;
 use Jaxon\Storage\StorageManager;
 use League\Flysystem\InMemory\InMemoryFilesystemAdapter;
 use PHPUnit\Framework\TestCase;
@@ -38,7 +38,7 @@ class StorageTest extends TestCase
     }
 
     /**
-     * @throws RequestException
+     * @throws Exception
      */
     public function testStorageReader()
     {
@@ -69,13 +69,13 @@ class StorageTest extends TestCase
 
     public function testErrorUnknownAdapter()
     {
-        $this->expectException(RequestException::class);
+        $this->expectException(Exception::class);
         $xUnknownStorage = $this->xManager->make('unknown', $this->sInputDir);
     }
 
     public function testErrorUnknownConfig()
     {
-        $this->expectException(RequestException::class);
+        $this->expectException(Exception::class);
         $xUnknownStorage = $this->xManager->get('unknown');
     }
 
@@ -87,7 +87,7 @@ class StorageTest extends TestCase
             'options' => [],
         ], 'storage.custom');
 
-        $this->expectException(RequestException::class);
+        $this->expectException(Exception::class);
         $xErrorStorage = $this->xManager->get('custom');
     }
 
@@ -99,7 +99,7 @@ class StorageTest extends TestCase
             'options' => [],
         ], 'storage.custom');
 
-        $this->expectException(RequestException::class);
+        $this->expectException(Exception::class);
         $xErrorStorage = $this->xManager->get('custom');
     }
 
@@ -111,7 +111,7 @@ class StorageTest extends TestCase
             'options' => null,
         ], 'storage.custom');
 
-        $this->expectException(RequestException::class);
+        $this->expectException(Exception::class);
         $xErrorStorage = $this->xManager->get('custom');
     }
 }

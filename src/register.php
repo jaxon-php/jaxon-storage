@@ -2,16 +2,16 @@
 
 namespace Jaxon\Storage;
 
-use Jaxon\App\Config\ConfigManager;
-use Jaxon\Storage\StorageManager;
+use Jaxon\Config\Config;
+use Jaxon\Config\ConfigSetter;
+use Jaxon\Utils\Translation\Translator;
 use Lagdo\Facades\ContainerWrapper;
 
 use function function_exists;
-use function Jaxon\jaxon;
 use function php_sapi_name;
 
 /**
- * Register the values into the container
+ * Register the values into the Jaxon container
  *
  * @return void
  */
@@ -19,25 +19,27 @@ function _register(): void
 {
     $di = jaxon()->di();
 
+    // Setup the logger facade.
+    ContainerWrapper::setContainer($di);
+
+    // File storage
     if(!$di->h(StorageManager::class))
     {
-        // File storage
-        $di->set(StorageManager::class, function($c): StorageManager {
-            return new StorageManager($c->g(ConfigManager::class));
+        $di->set(StorageManager::class, function() use($di): StorageManager {
+            $xConfigGetter = function() use($di): Config {
+                $aConfigOptions = $di->config()->getAppOption('storage', []);
+                return (new ConfigSetter())->newConfig($aConfigOptions);
+            };
+
+            return new StorageManager($xConfigGetter, $di->g(Translator::class));
         });
     }
 }
 
 function register()
 {
-    if(function_exists('jaxon'))
-    {
-        // Setup the logger facade.
-        ContainerWrapper::setContainer(jaxon()->di());
-    }
-
     // Do nothing if running in cli.
-    if(php_sapi_name() !== 'cli')
+    if(php_sapi_name() !== 'cli' && function_exists('jaxon'))
     {
         _register();
     };
@@ -50,7 +52,13 @@ function register()
  */
 function storage(): StorageManager
 {
-    return jaxon()->di()->g(StorageManager::class);
+    if(function_exists('jaxon'))
+    {
+        return jaxon()->di()->g(StorageManager::class);
+    }
+
+    static $xStorageManager = null;
+    return $xStorageManager ?: new StorageManager();
 }
 
 register();

@@ -14,7 +14,8 @@
     },
     "require": {
         "php": ">=8.0",
-        "jaxon-php/jaxon-core": "^5.0",
+        "jaxon-php/jaxon-config": "^1.0",
+        "jaxon-php/jaxon-utils": "^2.0",
         "lagdo/facades": "^1.0",
         "league/flysystem": "^3.0|^2.2"
     },

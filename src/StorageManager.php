@@ -14,8 +14,7 @@
 
 namespace Jaxon\Storage;
 
-use Jaxon\App\Config\ConfigManager;
-use Jaxon\Exception\RequestException;
+use Jaxon\Config\Config;
 use Jaxon\Utils\Translation\Translator;
 use Lagdo\Facades\Logger;
 use League\Flysystem\Filesystem;
@@ -23,7 +22,6 @@ use League\Flysystem\Local\LocalFilesystemAdapter;
 use Closure;
 
 use function dirname;
-use function function_exists;
 use function is_array;
 use function is_callable;
 use function is_string;
@@ -36,18 +34,49 @@ class StorageManager
     protected $aAdapters = [];
 
     /**
-     * @var Translator|null
+     * @var Config|null
      */
-    protected Translator|null $xTranslator = null;
+    protected Config|null $xConfig = null;
 
     /**
      * The constructor
      *
-     * @param ConfigManager $xConfigManager
+     * @param Closure|null $xConfigGetter
+     * @param Translator|null $xTranslator
      */
-    public function __construct(protected ConfigManager $xConfigManager)
+    public function __construct(private Closure|null $xConfigGetter = null,
+        protected Translator|null $xTranslator = null)
     {
         $this->registerDefaults();
+
+        if($xTranslator !== null)
+        {
+            $this->loadTranslations($xTranslator);
+        }
+    }
+
+    /**
+     * @param Closure $xConfigGetter
+     *
+     * @return void
+     */
+    public function setConfigGetter(Closure $xConfigGetter): void
+    {
+        $this->xConfigGetter = $xConfigGetter;
+        $this->xConfig = null;
+    }
+
+    /**
+     * @return void
+     */
+    private function loadTranslations(Translator $xTranslator): void
+    {
+        // Translation directory
+        $sTranslationDir = dirname(__DIR__) . '/translations';
+        // Load the storage translations
+        $xTranslator->loadTranslations("$sTranslationDir/en/storage.php", 'en');
+        $xTranslator->loadTranslations("$sTranslationDir/fr/storage.php", 'fr');
+        $xTranslator->loadTranslations("$sTranslationDir/es/storage.php", 'es');
     }
 
     /**
@@ -62,14 +91,8 @@ class StorageManager
             return $this->xTranslator;
         }
 
-        $this->xTranslator = !function_exists('jaxon') ? new Translator() :
-            jaxon()->di()->g(Translator::class);
-        // Translation directory
-        $sTranslationDir = dirname(__DIR__) . '/translations';
-        // Load the storage translations
-        $this->xTranslator->loadTranslations("$sTranslationDir/en/storage.php", 'en');
-        $this->xTranslator->loadTranslations("$sTranslationDir/fr/storage.php", 'fr');
-        $this->xTranslator->loadTranslations("$sTranslationDir/es/storage.php", 'es');
+        $this->xTranslator = new Translator();
+        $this->loadTranslations($this->xTranslator);
 
         return $this->xTranslator;
     }
@@ -93,9 +116,9 @@ class StorageManager
     private function registerDefaults()
     {
         // Local file system adapter
-        $this->register('local', function(string $sRootDir, $xOptions) {
-            return empty($xOptions) ? new LocalFilesystemAdapter($sRootDir) :
-                new LocalFilesystemAdapter($sRootDir, $xOptions);
+        $this->register('local', function(string $sRootDir, array $aOptions) {
+            return empty($aOptions) ? new LocalFilesystemAdapter($sRootDir) :
+                new LocalFilesystemAdapter($sRootDir, ...$aOptions);
         });
     }
 
@@ -105,41 +128,55 @@ class StorageManager
      * @param array $aOptions
      *
      * @return Filesystem
-     * @throws RequestException
+     * @throws Exception
      */
     public function make(string $sAdapter, string $sRootDir, array $aOptions = []): Filesystem
     {
         if(!isset($this->aAdapters[$sAdapter]) || !is_callable($this->aAdapters[$sAdapter]))
         {
             Logger::error("Jaxon Storage: adapter '$sAdapter' not configured.");
-            throw new RequestException($this->translator()->trans('errors.storage.adapter'));
+            throw new Exception($this->translator()->trans('errors.storage.adapter'));
         }
 
-        return new Filesystem(($this->aAdapters[$sAdapter])($sRootDir, $aOptions));
+        return new Filesystem($this->aAdapters[$sAdapter]($sRootDir, $aOptions));
+    }
+
+    /**
+     * @throws Exception
+     * @return Config
+     */
+    private function config(): Config
+    {
+        if($this->xConfig !== null)
+        {
+            return $this->xConfig;
+        }
+
+        if($this->xConfigGetter === null)
+        {
+            Logger::error("Jaxon Storage: No config getter set.");
+            throw new Exception($this->translator()->trans('errors.storage.getter'));
+        }
+
+        return $this->xConfig = ($this->xConfigGetter)();
     }
 
     /**
      * @param string $sOptionName
      *
      * @return Filesystem
-     * @throws RequestException
+     * @throws Exception
      */
     public function get(string $sOptionName): Filesystem
     {
-        $sConfigKey = "storage.$sOptionName";
-        if(!$this->xConfigManager->hasAppOption($sConfigKey))
-        {
-            Logger::error("Jaxon Storage: No '$sConfigKey' in options.");
-            throw new RequestException($this->translator()->trans('errors.storage.options'));
-        }
-
-        $sAdapter = $this->xConfigManager->getAppOption("$sConfigKey.adapter");
-        $sRootDir = $this->xConfigManager->getAppOption("$sConfigKey.dir");
-        $aOptions = $this->xConfigManager->getAppOption("$sConfigKey.options", []);
+        $xConfig = $this->config();
+        $sAdapter = $xConfig->getOption("$sOptionName.adapter");
+        $sRootDir = $xConfig->getOption("$sOptionName.dir");
+        $aOptions = $xConfig->getOption("$sOptionName.options", []);
         if(!is_string($sAdapter) || !is_string($sRootDir) || !is_array($aOptions))
         {
-            Logger::error("Jaxon Storage: incorrect values in '$sConfigKey' options.");
-            throw new RequestException($this->translator()->trans('errors.storage.options'));
+            Logger::error("Jaxon Storage: incorrect values in '$sOptionName' options.");
+            throw new Exception($this->translator()->trans('errors.storage.options'));
         }
 
         return $this->make($sAdapter, $sRootDir, $aOptions);
