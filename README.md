@@ -17,6 +17,14 @@ This package provides a tiny wrapper for file storage for the Jaxon library usin
 
 The library features are provided in the `Jaxon\Storage\StorageManager` class, which implements three functions.
 
+#### The global function
+
+Starting from version 1.1.0, a global function is available to get the instance of the storage manager.
+
+```php
+use function Jaxon\Storage\storage;
+```
+
 #### Register an adapter
 
 This function registers an adapter from the [Flysystem](https://flysystem.thephpleague.com) library.
@@ -37,13 +45,16 @@ By default, the library registers an adapter for the local filesystem.
 
 ```php
 use League\Flysystem\Local\LocalFilesystemAdapter;
+use function Jaxon\Storage\storage;
 
 // Local file system adapter
-$manager->register('local', function(string $sRootDir, $xOptions) {
-    return empty($xOptions) ? new LocalFilesystemAdapter($sRootDir) :
-        new LocalFilesystemAdapter($sRootDir, $xOptions);
+storage()->register('local', function(string $sRootDir, array $aOptions) {
+    return empty($aOptions) ? new LocalFilesystemAdapter($sRootDir) :
+        new LocalFilesystemAdapter($sRootDir, ...$aOptions);
 });
 ```
+
+This function will get the instance from the DI container if the Jaxon Core library is available, or else it will create its own instance of the `Jaxon\Storage\StorageManager` class.
 
 #### Create a file input/output object
 
@@ -68,8 +79,10 @@ The first parameter is the id of a registered adapter, and the other will be pas
 The code snippet below writes the given content in the `/var/www/storage/uploads/uploaded-file.txt` file.
 
 ```php
-$storage = $manager->make('local', '/var/www/storage/uploads');
-$storage->write('uploaded-file.txt', $$uploadedContent)
+use function Jaxon\Storage\storage;
+
+$storage = storage()->make('local', '/var/www/storage/uploads');
+$storage->write('uploaded-file.txt', $uploadedContent)
 ```
 
 #### Create a file input/output object from the Jaxon config
@@ -107,8 +120,53 @@ return [
 The code snippet below writes the given content in the `/var/www/storage/uploads/uploaded-file.txt` file, as in the previous example.
 
 ```php
-$storage = $manager->get('uploads');
-$storage->write('uploaded-file.txt', $$uploadedContent)
+use function Jaxon\Storage\storage;
+
+$storage = storage()->get('uploads');
+$storage->write('uploaded-file.txt', $uploadedContent)
+```
+
+## Using without the Jaxon library
+
+Starting from version 1.1.0, the Jaxon Storage classes do not depend on the Jaxon Core classes anymore.
+As a consequence, some features will not be automatically available, and will need an extra setup.
+
+#### The locale for translations
+
+Without the Jaxon Core library, the Jaxon Storage will create its own instance of the `Jaxon\Utils\Translation\Translator` class, which will then need to be set.
+
+```php
+use function Jaxon\Storage\storage;
+
+// Set the translation locle to french.
+storage()->translator()->setLocale('fr');
+```
+
+#### The storage config options
+
+Without the Jaxon Core library, a call to the `storage()->get()` function will throw an exception due to missing config options.
+The library then needs to be provided with a closure which returns a `Jaxon\Config\Config` object populated with the config options.
+
+```php
+use Jaxon\Config\Config;
+use Jaxon\Config\ConfigSetter;
+use function Jaxon\Storage\storage;
+
+// Provide the config setter
+storage()->setConfigGetter(function(): Config {
+    $setter = new ConfigSetter();
+    return $setter->newConfig([
+        'uploads' => [
+            'adapter' => 'local',
+            'dir' => '/var/www/storage/uploads',
+            // 'options' => [], // Optional
+        ],
+    ]);
+});
+
+// Usage
+$storage = storage()->get('uploads');
+$storage->write('uploaded-file.txt', $uploadedContent)
 ```
 
 ## Register additional adapters
@@ -120,65 +178,92 @@ They are provided in separate packages, which need to be installed first.
 #### AWS S3 file system adapter
 
 ```php
-$manager->register('aws-s3', function(string $sRootDir, array $aOptions) {
-    /** @var \Aws\S3\S3ClientInterface $client */
-    $client = new \Aws\S3\S3Client($aOptions['client'] ?? []);
-    return new \League\Flysystem\AwsS3V3\AwsS3V3Adapter($client, $aOptions['bucket'] ?? '', $sRootDir);
+use Aws\S3\S3Client;
+use League\Flysystem\AwsS3V3\AwsS3V3Adapter;
+use function Jaxon\Storage\storage;
+
+storage()->register('aws-s3', function(string $sRootDir, array $aOptions) {
+    $client = new S3Client($aOptions['client'] ?? []);
+    return new AwsS3V3Adapter($client, $aOptions['bucket'] ?? '', $sRootDir);
 });
 ```
 
 #### Async AWS S3 file system adapter
 
 ```php
-$manager->register('async-aws-s3', function(string $sRootDir, array $aOptions) {
-    $client = isset($aOptions['client']) ? new \AsyncAws\S3\S3Client($aOptions['client']) : new \AsyncAws\S3\S3Client();
-    return new \League\Flysystem\AsyncAwsS3\AsyncAwsS3Adapter($client, $aOptions['bucket'] ?? '', $sRootDir);
+use AsyncAws\S3\S3Client;
+use League\Flysystem\AsyncAwsS3\AsyncAwsS3Adapter;
+use function Jaxon\Storage\storage;
+
+storage()->register('async-aws-s3', function(string $sRootDir, array $aOptions) {
+    $client = isset($aOptions['client']) ? new S3Client($aOptions['client']) : new S3Client();
+    return new AsyncAwsS3Adapter($client, $aOptions['bucket'] ?? '', $sRootDir);
 });
 ```
 
 #### Google Cloud file system adapter
 
 ```php
-$manager->register('google-cloud', function(string $sRootDir, array $aOptions) {
-    $storageClient = new \Google\Cloud\Storage\StorageClient($aOptions['client'] ?? []);
+use Google\Cloud\Storage\StorageClient;
+use League\Flysystem\AzureBlobStorage\GoogleCloudStorageAdapter;
+use function Jaxon\Storage\storage;
+
+storage()->register('google-cloud', function(string $sRootDir, array $aOptions) {
+    $storageClient = new StorageClient($aOptions['client'] ?? []);
     $bucket = $storageClient->bucket($aOptions['bucket'] ?? '');
-    return new \League\Flysystem\AzureBlobStorage\GoogleCloudStorageAdapter($bucket, $sRootDir);
+    return new GoogleCloudStorageAdapter($bucket, $sRootDir);
 });
 ```
 
 #### Microsoft Azure file system adapter
 
 ```php
-$manager->register('azure-blob', function(string $sRootDir, array $aOptions) {
-    $client = \MicrosoftAzure\Storage\Blob\BlobRestProxy::createBlobService($aOptions['dsn']);
-    return new \League\Flysystem\AzureBlobStorage\AzureBlobStorageAdapter($client, $aOptions['container'], $sRootDir);
+use League\Flysystem\AzureBlobStorage\AzureBlobStorageAdapter;
+use MicrosoftAzure\Storage\Blob\BlobRestProxy;
+use function Jaxon\Storage\storage;
+
+storage()->register('azure-blob', function(string $sRootDir, array $aOptions) {
+    $client = BlobRestProxy::createBlobService($aOptions['dsn']);
+    return new AzureBlobStorageAdapter($client, $aOptions['container'], $sRootDir);
 });
 ```
 
 #### FTP file system adapter
 
 ```php
-$manager->register('ftp', function(string $sRootDir, array $aOptions) {
+use League\Flysystem\Ftp\FtpAdapter;
+use League\Flysystem\Ftp\FtpConnectionOptions;
+use function Jaxon\Storage\storage;
+
+storage()->register('ftp', function(string $sRootDir, array $aOptions) {
     $aOptions['root'] = $sRootDir;
-    $xOptions = \League\Flysystem\Ftp\FtpConnectionOptions::fromArray($aOptions);
-    return new \League\Flysystem\Ftp\FtpAdapter($xOptions);
+    $xOptions = FtpConnectionOptions::fromArray($aOptions);
+    return new FtpAdapter($xOptions);
 });
 ```
 
 #### SFTP V2 file system adapter
 
 ```php
-$manager->register('sftp-v2', function(string $sRootDir, array $aOptions) {
-    $provider = new \League\Flysystem\PhpseclibV2\SftpConnectionProvider(...$aOptions);
-    return new \League\Flysystem\PhpseclibV2\SftpAdapter($provider, $sRootDir);
+use League\Flysystem\PhpseclibV2\SftpAdapter;
+use League\Flysystem\PhpseclibV2\SftpConnectionProvider;
+use function Jaxon\Storage\storage;
+
+storage()->register('sftp-v2', function(string $sRootDir, array $aOptions) {
+    $provider = new SftpConnectionProvider(...$aOptions);
+    return new SftpAdapter($provider, $sRootDir);
 });
 ```
 
 #### SFTP V3 file system adapter
 
 ```php
-$manager->register('sftp-v3', function(string $sRootDir, array $aOptions) {
-    $provider = new \League\Flysystem\PhpseclibV3\SftpConnectionProvider(...$aOptions);
-    return new \League\Flysystem\PhpseclibV3\SftpAdapter($provider, $sRootDir);
+use League\Flysystem\PhpseclibV3\SftpAdapter;
+use League\Flysystem\PhpseclibV3\SftpConnectionProvider;
+use function Jaxon\Storage\storage;
+
+storage()->register('sftp-v3', function(string $sRootDir, array $aOptions) {
+    $provider = new SftpConnectionProvider(...$aOptions);
+    return new SftpAdapter($provider, $sRootDir);
 });
 ```
