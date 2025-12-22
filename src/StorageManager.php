@@ -113,13 +113,11 @@ class StorageManager
      *
      * @return void
      */
-    private function registerDefaults()
+    private function registerDefaults(): void
     {
         // Local file system adapter
-        $this->register('local', function(string $sRootDir, array $aOptions) {
-            return empty($aOptions) ? new LocalFilesystemAdapter($sRootDir) :
-                new LocalFilesystemAdapter($sRootDir, ...$aOptions);
-        });
+        $this->register('local', fn(string $sRootDir, array $aOptions) =>
+            new LocalFilesystemAdapter($sRootDir, ...$aOptions));
     }
 
     /**

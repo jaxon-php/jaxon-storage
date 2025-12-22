@@ -49,8 +49,7 @@ use function Jaxon\Storage\storage;
 
 // Local file system adapter
 storage()->register('local', function(string $sRootDir, array $aOptions) {
-    return empty($aOptions) ? new LocalFilesystemAdapter($sRootDir) :
-        new LocalFilesystemAdapter($sRootDir, ...$aOptions);
+    return new LocalFilesystemAdapter($sRootDir, ...$aOptions);
 });
 ```
 
