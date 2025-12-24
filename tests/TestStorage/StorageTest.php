@@ -4,11 +4,13 @@ namespace Jaxon\Storage\Tests\TestStorage;
 
 use Jaxon\Storage\Exception;
 use Jaxon\Storage\StorageManager;
+use League\Flysystem\CorruptedPathDetected;
 use League\Flysystem\InMemory\InMemoryFilesystemAdapter;
 use PHPUnit\Framework\TestCase;
 
 use function Jaxon\jaxon;
 use function Jaxon\Storage\_register;
+use function dirname;
 use function file_get_contents;
 
 class StorageTest extends TestCase
@@ -27,7 +29,7 @@ class StorageTest extends TestCase
     {
         _register();
 
-        $this->sInputDir = __DIR__ . '/../files';
+        $this->sInputDir = dirname(__DIR__) . '/files';
         $this->xManager = jaxon()->di()->g(StorageManager::class);
     }
 
@@ -42,10 +44,70 @@ class StorageTest extends TestCase
      */
     public function testStorageReader()
     {
-        $xInputStorage = $this->xManager->make('local', $this->sInputDir);
+        $xInputStorage = $this->xManager->adapter('local')->make($this->sInputDir);
         $sInputContent = $xInputStorage->read('hello.txt');
 
         $this->assertEquals(file_get_contents("{$this->sInputDir}/hello.txt"), $sInputContent);
+    }
+
+    public function testAdapterAndDirOptions()
+    {
+        jaxon()->config()->setAppOptions([
+            'adapters' => [
+                'files' => [
+                    'alias' => 'local',
+                    'options' => [
+                        'lazyRootCreation' => false, // Create dirs if they don't exist.
+                    ],
+                ],
+            ],
+            'stores' => [
+                'files' => [
+                    'adapter' => 'files',
+                    'dir' => $this->sInputDir,
+                    'options' => [
+                        'config' => [
+                            'public_url' => '/static/files',
+                        ],
+                    ],
+                ],
+            ],
+        ], 'storage');
+
+        $xInputStorage = $this->xManager->get('files');
+        $sInputContent = $xInputStorage->read('hello.txt');
+
+        $this->assertEquals(file_get_contents("{$this->sInputDir}/hello.txt"), $sInputContent);
+        $this->assertEquals('/static/files/hello.txt', $xInputStorage->publicUrl('hello.txt'));
+    }
+
+    public function testWriteError()
+    {
+        jaxon()->config()->setAppOptions([
+            'adapters' => [
+                'files' => [
+                    'alias' => 'local',
+                    'options' => [
+                        'lazyRootCreation' => true, // Don't create dirs if they don't exist.
+                    ],
+                ],
+            ],
+            'stores' => [
+                'files' => [
+                    'adapter' => 'files',
+                    'dir' => dirname(__DIR__ . '/files'),
+                    'options' => [
+                        'config' => [
+                            'public_url' => '/static/files',
+                        ],
+                    ],
+                ],
+            ],
+        ], 'storage');
+
+        $this->expectException(CorruptedPathDetected::class);
+        $xInputStorage = $this->xManager->get('files');
+        $sInputContent = $xInputStorage->read("\0hello.txt");
     }
 
     public function testStorageWriter()
@@ -55,9 +117,9 @@ class StorageTest extends TestCase
             'adapter' => 'memory',
             'dir' => 'files',
             'options' => [],
-        ], 'storage.memory');
+        ], 'storage.stores.memory');
 
-        $xInputStorage = $this->xManager->make('local', $this->sInputDir);
+        $xInputStorage = $this->xManager->adapter('local')->make($this->sInputDir);
         $sInputContent = $xInputStorage->read('hello.txt');
 
         $xOutputStorage = $this->xManager->get('memory');
@@ -70,7 +132,7 @@ class StorageTest extends TestCase
     public function testErrorUnknownAdapter()
     {
         $this->expectException(Exception::class);
-        $xUnknownStorage = $this->xManager->make('unknown', $this->sInputDir);
+        $xUnknownStorage = $this->xManager->adapter('unknown')->make($this->sInputDir);
     }
 
     public function testErrorUnknownConfig()
@@ -85,7 +147,7 @@ class StorageTest extends TestCase
             'adapter' => null,
             'dir' => 'files',
             'options' => [],
-        ], 'storage.custom');
+        ], 'storage.stores.custom');
 
         $this->expectException(Exception::class);
         $xErrorStorage = $this->xManager->get('custom');
@@ -97,7 +159,7 @@ class StorageTest extends TestCase
             'adapter' => 'memory',
             'dir' => null,
             'options' => [],
-        ], 'storage.custom');
+        ], 'storage.stores.custom');
 
         $this->expectException(Exception::class);
         $xErrorStorage = $this->xManager->get('custom');
@@ -109,7 +171,7 @@ class StorageTest extends TestCase
             'adapter' => 'memory',
             'dir' => 'files',
             'options' => null,
-        ], 'storage.custom');
+        ], 'storage.stores.custom');
 
         $this->expectException(Exception::class);
         $xErrorStorage = $this->xManager->get('custom');

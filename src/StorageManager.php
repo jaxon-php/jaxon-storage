@@ -21,6 +21,7 @@ use League\Flysystem\Filesystem;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use Closure;
 
+use function count;
 use function dirname;
 use function is_array;
 use function is_string;
@@ -103,18 +104,29 @@ class StorageManager
 
     /**
      * @param string $sAdapter
-     * @param Closure $cFactory
+     * @param Closure|string $xFactory
      *
      * @return void
      */
-    public function register(string $sAdapter, Closure $cFactory): void
+    public function register(string $sAdapter, Closure|string $xFactory): void
     {
         if(isset($this->aAdapters[$sAdapter]))
         {
             return;
         }
 
-        $this->aAdapters[$sAdapter] = $cFactory;
+        if(is_string($xFactory))
+        {
+            // The adapter is an alias.
+            if(!isset($this->aAdapters[$xFactory]))
+            {
+                Logger::error("Jaxon Storage: adapter '{$xFactory}' not configured.");
+                throw new Exception($this->translator()->trans('errors.storage.adapter'));
+            }
+            $xFactory = $this->aAdapters[$xFactory];
+        }
+
+        $this->aAdapters[$sAdapter] = $xFactory;
     }
 
     /**
@@ -202,6 +214,14 @@ class StorageManager
         {
             Logger::error("Jaxon Storage: incorrect values in 'adapters.$sAdapter' options.");
             throw new Exception($this->translator()->trans('errors.storage.options'));
+        }
+
+        if(count($aOptions) === 2 &&
+            is_string($aOptions['alias'] ?? null) &&
+            is_array($aOptions['options'] ?? null))
+        {
+            $this->register($sAdapter, $aOptions['alias']);
+            $aOptions = $aOptions['options'];
         }
 
         return $this->adapter($sAdapter, $aOptions);

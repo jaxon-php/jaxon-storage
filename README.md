@@ -55,6 +55,16 @@ storage()->register('local', function(string $sRootDir, array $aOptions) {
 });
 ```
 
+An adapter can be registered as an alias of an already registered one.
+This is useful for example for using the same adapter with different options.
+
+```php
+use function Jaxon\Storage\storage;
+
+// The "uploads" adapter is an alias of the local file system adapter
+storage()->register('uploads', 'local');
+```
+
 #### Create a file input/output object
 
 A [Flysystem](https://flysystem.thephpleague.com) object for file input and output is created by chaining the `adapter()` and `make()` functions.
@@ -137,6 +147,29 @@ use function Jaxon\Storage\storage;
 
 $storage = storage()->get('uploads');
 $storage->write('uploaded-file.txt', $uploadedContent)
+```
+
+Each adapter can also be defined as an alias of an already defined adapter.
+
+```php
+return [
+    'app' => [
+        'storage' => [
+            'adapters' => [
+                // Adapters options
+                'uploads' => [
+                    'alias' => 'local',
+                    'options' => [], // Local adapter options for the uploads
+                ],
+                'exports' => [
+                    'alias' => 'local',
+                    'options' => [], // Local adapter options for the exports
+                ],
+            ]
+        ],
+        'stores' => [],
+    ],
+];
 ```
 
 ## Using without the Jaxon library
