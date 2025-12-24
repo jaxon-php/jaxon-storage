@@ -23,7 +23,6 @@ use Closure;
 
 use function dirname;
 use function is_array;
-use function is_callable;
 use function is_string;
 
 class StorageManager
@@ -32,6 +31,11 @@ class StorageManager
      * @var array<string, Closure>
      */
     protected $aAdapters = [];
+
+    /**
+     * @var array
+     */
+    private $aCurrentAdapter = [];
 
     /**
      * @var Config|null
@@ -103,8 +107,13 @@ class StorageManager
      *
      * @return void
      */
-    public function register(string $sAdapter, Closure $cFactory)
+    public function register(string $sAdapter, Closure $cFactory): void
     {
+        if(isset($this->aAdapters[$sAdapter]))
+        {
+            return;
+        }
+
         $this->aAdapters[$sAdapter] = $cFactory;
     }
 
@@ -122,21 +131,41 @@ class StorageManager
 
     /**
      * @param string $sAdapter
+     * @param array $aAdapterOptions
+     *
+     * @return self
+     */
+    public function adapter(string $sAdapter, array $aAdapterOptions = []): self
+    {
+        $this->aCurrentAdapter = [
+            'adapter' => $sAdapter,
+            'options' => $aAdapterOptions,
+        ];
+        return $this;
+    }
+
+    /**
      * @param string $sRootDir
      * @param array $aOptions
      *
      * @return Filesystem
      * @throws Exception
      */
-    public function make(string $sAdapter, string $sRootDir, array $aOptions = []): Filesystem
+    public function make(string $sRootDir, array $aOptions = []): Filesystem
     {
-        if(!isset($this->aAdapters[$sAdapter]) || !is_callable($this->aAdapters[$sAdapter]))
+        $sAdapter = $this->aCurrentAdapter['adapter'] ?? '';
+        if(!isset($this->aAdapters[$sAdapter]))
         {
             Logger::error("Jaxon Storage: adapter '$sAdapter' not configured.");
             throw new Exception($this->translator()->trans('errors.storage.adapter'));
         }
 
-        return new Filesystem($this->aAdapters[$sAdapter]($sRootDir, $aOptions));
+        // Make the adapter.
+        $xAdapter = $this->aAdapters[$sAdapter]($sRootDir, $this->aCurrentAdapter['options']);
+        // Reset the current adapter.
+        $this->aCurrentAdapter = [];
+
+        return new Filesystem($xAdapter, ...$aOptions);
     }
 
     /**
@@ -160,6 +189,25 @@ class StorageManager
     }
 
     /**
+     * @param string $sAdapter
+     *
+     * @return self
+     */
+    private function setCurrentAdapter(string $sAdapter): self
+    {
+        $xConfig = $this->config();
+
+        $aOptions = $xConfig->getOption("adapters.$sAdapter", []);
+        if(!is_array($aOptions))
+        {
+            Logger::error("Jaxon Storage: incorrect values in 'adapters.$sAdapter' options.");
+            throw new Exception($this->translator()->trans('errors.storage.options'));
+        }
+
+        return $this->adapter($sAdapter, $aOptions);
+    }
+
+    /**
      * @param string $sOptionName
      *
      * @return Filesystem
@@ -168,15 +216,16 @@ class StorageManager
     public function get(string $sOptionName): Filesystem
     {
         $xConfig = $this->config();
-        $sAdapter = $xConfig->getOption("$sOptionName.adapter");
-        $sRootDir = $xConfig->getOption("$sOptionName.dir");
-        $aOptions = $xConfig->getOption("$sOptionName.options", []);
+
+        $sAdapter = $xConfig->getOption("stores.$sOptionName.adapter");
+        $sRootDir = $xConfig->getOption("stores.$sOptionName.dir");
+        $aOptions = $xConfig->getOption("stores.$sOptionName.options", []);
         if(!is_string($sAdapter) || !is_string($sRootDir) || !is_array($aOptions))
         {
-            Logger::error("Jaxon Storage: incorrect values in '$sOptionName' options.");
+            Logger::error("Jaxon Storage: incorrect values in 'stores.$sOptionName' options.");
             throw new Exception($this->translator()->trans('errors.storage.options'));
         }
 
-        return $this->make($sAdapter, $sRootDir, $aOptions);
+        return $this->setCurrentAdapter($sAdapter)->make($sRootDir, $aOptions);
     }
 }

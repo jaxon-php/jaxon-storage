@@ -25,6 +25,8 @@ Starting from version 1.1.0, a global function is available to get the instance 
 use function Jaxon\Storage\storage;
 ```
 
+This function will get the instance from the DI container if the Jaxon Core library is available, or else it will create its own instance of the `Jaxon\Storage\StorageManager` class.
+
 #### Register an adapter
 
 This function registers an adapter from the [Flysystem](https://flysystem.thephpleague.com) library.
@@ -53,34 +55,40 @@ storage()->register('local', function(string $sRootDir, array $aOptions) {
 });
 ```
 
-This function will get the instance from the DI container if the Jaxon Core library is available, or else it will create its own instance of the `Jaxon\Storage\StorageManager` class.
-
 #### Create a file input/output object
 
-This function creates a [Flysystem](https://flysystem.thephpleague.com) object for file input and output.
-
-```php
-use League\Flysystem\Filesystem;
-
-    /**
-     * @param string $sAdapter
-     * @param string $sRootDir
-     * @param array $aOptions
-     *
-     * @return Filesystem
-     * @throws RequestException
-     */
-    public function make(string $sAdapter, string $sRootDir, array $aOptions = []): Filesystem
-```
-
-The first parameter is the id of a registered adapter, and the other will be passed to the corresponding closure.
-
-The code snippet below writes the given content in the `/var/www/storage/uploads/uploaded-file.txt` file.
+A [Flysystem](https://flysystem.thephpleague.com) object for file input and output is created by chaining the `adapter()` and `make()` functions.
 
 ```php
 use function Jaxon\Storage\storage;
 
-$storage = storage()->make('local', '/var/www/storage/uploads');
+$storage = storage()
+    ->adapter('local')
+    ->make('/var/www/storage/uploads');
+$storage->write('uploaded-file.txt', $uploadedContent)
+```
+
+The `adapter()` function takes the id of a registered adapter as parameter, while the `make()` function takes the path to the root dir.
+
+The code snippet below writes the given content in the `/var/www/storage/uploads/uploaded-file.txt` file.
+
+The adapter and directory options can be passed to the `adapter()` and `make()` functions.
+The adapter options are set on the adapter object (e.g `LocalFilesystemAdapter`), while the directory options are set on the returned `Filesystem` object. Their values are then described in their respective documentations.
+
+```php
+use function Jaxon\Storage\storage;
+
+$aAdapterOptions = [
+    'lazyRootCreation' => true,
+];
+$aDirOptions = [
+    'config' => [
+        'public_url' => '/uploads',
+    ],
+];
+$storage = storage()
+    ->adapter('local', $aAdapterOptions)
+    ->make('/var/www/storage/uploads', $aDirOptions);
 $storage->write('uploaded-file.txt', $uploadedContent)
 ```
 
@@ -106,10 +114,16 @@ With this config,
 return [
     'app' => [
         'storage' => [
-            'uploads' => [
-                'adapter' => 'local',
-                'dir' => '/var/www/storage/uploads',
-                // 'options' => [], // Optional
+            'adapters' => [
+                // Adapters options
+                'local' => [], // Optional
+            ]
+            'stores' => [
+                'uploads' => [
+                    'adapter' => 'local',
+                    'dir' => '/var/www/storage/uploads',
+                    // 'options' => [], // Optional
+                ],
             ],
         ],
     ],
@@ -155,10 +169,16 @@ use function Jaxon\Storage\storage;
 storage()->setConfigGetter(function(): Config {
     $setter = new ConfigSetter();
     return $setter->newConfig([
-        'uploads' => [
-            'adapter' => 'local',
-            'dir' => '/var/www/storage/uploads',
-            // 'options' => [], // Optional
+        'adapters' => [
+            // Adapters options
+            'local' => [], // Optional
+        ]
+        'stores' => [
+            'uploads' => [
+                'adapter' => 'local',
+                'dir' => '/var/www/storage/uploads',
+                // 'options' => [], // Optional
+            ],
         ],
     ]);
 });
