@@ -9,6 +9,7 @@ use League\Flysystem\InMemory\InMemoryFilesystemAdapter;
 use PHPUnit\Framework\TestCase;
 
 use function Jaxon\jaxon;
+use function Jaxon\Storage\storage;
 use function dirname;
 use function file_get_contents;
 
@@ -27,7 +28,7 @@ class StorageTest extends TestCase
     public function setUp(): void
     {
         $this->sInputDir = dirname(__DIR__) . '/files';
-        $this->xManager = jaxon()->di()->g(StorageManager::class);
+        $this->xManager = storage();
     }
 
     public function tearDown(): void
