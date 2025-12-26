@@ -31,7 +31,7 @@
             "Jaxon\\Storage\\": "src/"
         },
         "files": [
-            "src/register.php"
+            "src/helpers.php"
         ]
     },
     "autoload-dev": {
