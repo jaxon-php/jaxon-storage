@@ -205,7 +205,7 @@ storage()->setConfigGetter(function(): Config {
         'adapters' => [
             // Adapters options
             'local' => [], // Optional
-        ]
+        ],
         'stores' => [
             'uploads' => [
                 'adapter' => 'local',

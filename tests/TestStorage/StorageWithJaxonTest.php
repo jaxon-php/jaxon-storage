@@ -13,7 +13,7 @@ use function Jaxon\Storage\storage;
 use function dirname;
 use function file_get_contents;
 
-class StorageTest extends TestCase
+class StorageWithJaxonTest extends TestCase
 {
     /**
      * @var StorageManager
