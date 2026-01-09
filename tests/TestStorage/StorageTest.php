@@ -37,12 +37,6 @@ class StorageTest extends TestCase
         $this->xConfigSetter = new ConfigSetter();
     }
 
-    public function tearDown(): void
-    {
-        jaxon()->reset();
-        parent::tearDown();
-    }
-
     private function setConfigOptions(array $aOptions, string $sPrefix = '')
     {
         $this->xManager->setConfigGetter(fn(): Config =>
