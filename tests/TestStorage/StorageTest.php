@@ -2,23 +2,28 @@
 
 namespace Jaxon\Storage\Tests\TestStorage;
 
+use Jaxon\Config\Config;
+use Jaxon\Config\ConfigSetter;
 use Jaxon\Storage\StorageException;
 use Jaxon\Storage\StorageManager;
 use League\Flysystem\CorruptedPathDetected;
 use League\Flysystem\InMemory\InMemoryFilesystemAdapter;
 use PHPUnit\Framework\TestCase;
 
-use function Jaxon\jaxon;
-use function Jaxon\Storage\storage;
 use function dirname;
 use function file_get_contents;
 
-class StorageWithJaxonTest extends TestCase
+class StorageTest extends TestCase
 {
     /**
      * @var StorageManager
      */
     protected $xManager;
+
+    /**
+     * @var ConfigSetter
+     */
+    protected $xConfigSetter;
 
     /**
      * @var string
@@ -28,13 +33,20 @@ class StorageWithJaxonTest extends TestCase
     public function setUp(): void
     {
         $this->sInputDir = dirname(__DIR__) . '/files';
-        $this->xManager = storage();
+        $this->xManager = new StorageManager();
+        $this->xConfigSetter = new ConfigSetter();
     }
 
     public function tearDown(): void
     {
         jaxon()->reset();
         parent::tearDown();
+    }
+
+    private function setConfigOptions(array $aOptions, string $sPrefix = '')
+    {
+        $this->xManager->setConfigGetter(fn(): Config =>
+            $this->xConfigSetter->newConfig($aOptions, $sPrefix));
     }
 
     /**
@@ -50,7 +62,7 @@ class StorageWithJaxonTest extends TestCase
 
     public function testAdapterAndDirOptions()
     {
-        jaxon()->config()->setAppOptions([
+        $this->setConfigOptions([
             'adapters' => [
                 'files' => [
                     'alias' => 'local',
@@ -70,7 +82,7 @@ class StorageWithJaxonTest extends TestCase
                     ],
                 ],
             ],
-        ], 'storage');
+        ]);
 
         $xInputStorage = $this->xManager->get('files');
         $sInputContent = $xInputStorage->read('hello.txt');
@@ -81,7 +93,7 @@ class StorageWithJaxonTest extends TestCase
 
     public function testWriteError()
     {
-        jaxon()->config()->setAppOptions([
+        $this->setConfigOptions([
             'adapters' => [
                 'files' => [
                     'alias' => 'local',
@@ -101,7 +113,7 @@ class StorageWithJaxonTest extends TestCase
                     ],
                 ],
             ],
-        ], 'storage');
+        ]);
 
         $this->expectException(CorruptedPathDetected::class);
         $xInputStorage = $this->xManager->get('files');
@@ -111,11 +123,11 @@ class StorageWithJaxonTest extends TestCase
     public function testStorageWriter()
     {
         $this->xManager->register('memory', fn() => new InMemoryFilesystemAdapter());
-        jaxon()->config()->setAppOptions([
+        $this->setConfigOptions([
             'adapter' => 'memory',
             'dir' => 'files',
             'options' => [],
-        ], 'storage.stores.memory');
+        ], 'stores.memory');
 
         $xInputStorage = $this->xManager->adapter('local')->make($this->sInputDir);
         $sInputContent = $xInputStorage->read('hello.txt');
@@ -141,11 +153,11 @@ class StorageWithJaxonTest extends TestCase
 
     public function testErrorIncorrectConfigAdapter()
     {
-        jaxon()->config()->setAppOptions([
+        $this->setConfigOptions([
             'adapter' => null,
             'dir' => 'files',
             'options' => [],
-        ], 'storage.stores.custom');
+        ], 'stores.custom');
 
         $this->expectException(StorageException::class);
         $xErrorStorage = $this->xManager->get('custom');
@@ -153,11 +165,11 @@ class StorageWithJaxonTest extends TestCase
 
     public function testErrorIncorrectConfigDir()
     {
-        jaxon()->config()->setAppOptions([
+        $this->setConfigOptions([
             'adapter' => 'memory',
             'dir' => null,
             'options' => [],
-        ], 'storage.stores.custom');
+        ], 'stores.custom');
 
         $this->expectException(StorageException::class);
         $xErrorStorage = $this->xManager->get('custom');
@@ -165,11 +177,11 @@ class StorageWithJaxonTest extends TestCase
 
     public function testErrorIncorrectConfigOptions()
     {
-        jaxon()->config()->setAppOptions([
+        $this->setConfigOptions([
             'adapter' => 'memory',
             'dir' => 'files',
             'options' => null,
-        ], 'storage.stores.custom');
+        ], 'stores.custom');
 
         $this->expectException(StorageException::class);
         $xErrorStorage = $this->xManager->get('custom');

@@ -2,8 +2,6 @@
 
 namespace Jaxon\Storage;
 
-use function function_exists;
-
 /**
  * Get the storage manager
  *
@@ -11,11 +9,6 @@ use function function_exists;
  */
 function storage(): StorageManager
 {
-    if(function_exists('jaxon'))
-    {
-        return jaxon()->di()->g(StorageManager::class);
-    }
-
     static $xStorageManager = new StorageManager();
     return $xStorageManager;
 }
