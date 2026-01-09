@@ -6,9 +6,13 @@ use Jaxon\Config\Config;
 use Jaxon\Config\ConfigSetter;
 use Jaxon\Storage\StorageException;
 use Jaxon\Storage\StorageManager;
+use Lagdo\Facades\ContainerWrapper;
 use League\Flysystem\CorruptedPathDetected;
 use League\Flysystem\InMemory\InMemoryFilesystemAdapter;
 use PHPUnit\Framework\TestCase;
+use Psr\Container\ContainerInterface;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 use function dirname;
 use function file_get_contents;
@@ -29,6 +33,24 @@ class StorageTest extends TestCase
      * @var string
      */
     protected $sInputDir;
+
+    public static function setUpBeforeClass(): void
+    {
+        ContainerWrapper::setContainer(new class implements ContainerInterface {
+            private $xLogger = null;
+
+            public function has(string $class): bool
+            {
+                return $class === LoggerInterface::class;
+            }
+
+            public function get(string $class): mixed
+            {
+                return $class !== LoggerInterface::class ? null :
+                    ($this->xLogger ??= new NullLogger());
+            }
+        }, false);
+    }
 
     public function setUp(): void
     {
