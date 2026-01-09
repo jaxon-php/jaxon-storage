@@ -121,7 +121,7 @@ class StorageManager
             if(!isset($this->aAdapters[$xFactory]))
             {
                 Logger::error("Jaxon Storage: adapter '{$xFactory}' not configured.");
-                throw new Exception($this->translator()->trans('errors.storage.adapter'));
+                throw new StorageException($this->translator()->trans('errors.storage.adapter'));
             }
             $xFactory = $this->aAdapters[$xFactory];
         }
@@ -161,7 +161,7 @@ class StorageManager
      * @param array $aOptions
      *
      * @return Filesystem
-     * @throws Exception
+     * @throws StorageException
      */
     public function make(string $sRootDir, array $aOptions = []): Filesystem
     {
@@ -169,7 +169,7 @@ class StorageManager
         if(!isset($this->aAdapters[$sAdapter]))
         {
             Logger::error("Jaxon Storage: adapter '$sAdapter' not configured.");
-            throw new Exception($this->translator()->trans('errors.storage.adapter'));
+            throw new StorageException($this->translator()->trans('errors.storage.adapter'));
         }
 
         // Make the adapter.
@@ -181,7 +181,7 @@ class StorageManager
     }
 
     /**
-     * @throws Exception
+     * @throws StorageException
      * @return Config
      */
     private function config(): Config
@@ -194,7 +194,7 @@ class StorageManager
         if($this->xConfigGetter === null)
         {
             Logger::error("Jaxon Storage: No config getter set.");
-            throw new Exception($this->translator()->trans('errors.storage.getter'));
+            throw new StorageException($this->translator()->trans('errors.storage.getter'));
         }
 
         return $this->xConfig = ($this->xConfigGetter)();
@@ -213,7 +213,7 @@ class StorageManager
         if(!is_array($aOptions))
         {
             Logger::error("Jaxon Storage: incorrect values in 'adapters.$sAdapter' options.");
-            throw new Exception($this->translator()->trans('errors.storage.options'));
+            throw new StorageException($this->translator()->trans('errors.storage.options'));
         }
 
         if(count($aOptions) === 2 &&
@@ -231,7 +231,7 @@ class StorageManager
      * @param string $sOptionName
      *
      * @return Filesystem
-     * @throws Exception
+     * @throws StorageException
      */
     public function get(string $sOptionName): Filesystem
     {
@@ -243,7 +243,7 @@ class StorageManager
         if(!is_string($sAdapter) || !is_string($sRootDir) || !is_array($aOptions))
         {
             Logger::error("Jaxon Storage: incorrect values in 'stores.$sOptionName' options.");
-            throw new Exception($this->translator()->trans('errors.storage.options'));
+            throw new StorageException($this->translator()->trans('errors.storage.options'));
         }
 
         return $this->setCurrentAdapter($sAdapter)->make($sRootDir, $aOptions);

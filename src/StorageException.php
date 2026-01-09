@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Exception.php
+ * StorageException.php
  *
  * Exception for storage functions.
  *
@@ -14,6 +14,6 @@
 
 namespace Jaxon\Storage;
 
-class Exception extends \Exception
+class StorageException extends \Exception
 {
 }

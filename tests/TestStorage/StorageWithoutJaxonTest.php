@@ -4,7 +4,7 @@ namespace Jaxon\Storage\Tests\TestStorage;
 
 use Jaxon\Config\Config;
 use Jaxon\Config\ConfigSetter;
-use Jaxon\Storage\Exception;
+use Jaxon\Storage\StorageException;
 use Jaxon\Storage\StorageManager;
 use League\Flysystem\CorruptedPathDetected;
 use League\Flysystem\InMemory\InMemoryFilesystemAdapter;
@@ -50,7 +50,7 @@ class StorageWithoutJaxonTest extends TestCase
     }
 
     /**
-     * @throws Exception
+     * @throws StorageException
      */
     public function testStorageReader()
     {
@@ -141,13 +141,13 @@ class StorageWithoutJaxonTest extends TestCase
 
     public function testErrorUnknownAdapter()
     {
-        $this->expectException(Exception::class);
+        $this->expectException(StorageException::class);
         $xUnknownStorage = $this->xManager->adapter('unknown')->make($this->sInputDir);
     }
 
     public function testErrorUnknownConfig()
     {
-        $this->expectException(Exception::class);
+        $this->expectException(StorageException::class);
         $xUnknownStorage = $this->xManager->get('unknown');
     }
 
@@ -159,7 +159,7 @@ class StorageWithoutJaxonTest extends TestCase
             'options' => [],
         ], 'stores.custom');
 
-        $this->expectException(Exception::class);
+        $this->expectException(StorageException::class);
         $xErrorStorage = $this->xManager->get('custom');
     }
 
@@ -171,7 +171,7 @@ class StorageWithoutJaxonTest extends TestCase
             'options' => [],
         ], 'stores.custom');
 
-        $this->expectException(Exception::class);
+        $this->expectException(StorageException::class);
         $xErrorStorage = $this->xManager->get('custom');
     }
 
@@ -183,7 +183,7 @@ class StorageWithoutJaxonTest extends TestCase
             'options' => null,
         ], 'stores.custom');
 
-        $this->expectException(Exception::class);
+        $this->expectException(StorageException::class);
         $xErrorStorage = $this->xManager->get('custom');
     }
 }
