@@ -17,15 +17,13 @@ This package provides a tiny wrapper for file storage for the Jaxon library usin
 
 The library features are provided in the `Jaxon\Storage\StorageManager` class, which implements three functions.
 
-#### The global function
-
 Starting from version 1.1.0, a global function is available to get the instance of the storage manager.
 
 ```php
 use function Jaxon\Storage\storage;
 ```
 
-This function will get the instance from the DI container if the Jaxon Core library is available, or else it will create its own instance of the `Jaxon\Storage\StorageManager` class.
+This function creates and returns a static instance of the `Jaxon\Storage\StorageManager` class.
 
 #### Register an adapter
 
@@ -41,7 +39,7 @@ This function registers an adapter from the [Flysystem](https://flysystem.thephp
     public function register(string $sAdapter, Closure $cFactory)
 ```
 
-The first parameter is the adapter id, and the second is a closure which takes a root dir and an optional array of options as parameters, and returns a `League\Flysystem\FilesystemAdapter` object configured for file input and output at a given location.
+The first parameter is the adapter id, and the second is a closure which takes a root dir and an optional array of options as parameters, and returns a `League\Flysystem\FilesystemAdapter` object configured for file input and output at the given location.
 
 By default, the library registers an adapter for the local filesystem.
 
@@ -102,45 +100,40 @@ $storage = storage()
 $storage->write('uploaded-file.txt', $uploadedContent)
 ```
 
-#### Create a file input/output object from the Jaxon config
+#### Create a file input/output object from a Jaxon Config object
 
-This function creates a [Flysystem](https://flysystem.thephpleague.com) object for file input and output, with options from the  `app.storage.$sOptionName.adapter`, `app.storage.$sOptionName.dir` and `app.storage.$sOptionName.options` entries of the Jaxon library config.
-
-```php
-use League\Flysystem\Filesystem;
-
-    /**
-     * @param string $sOptionName
-     *
-     * @return Filesystem
-     * @throws RequestException
-     */
-    public function get(string $sOptionName): Filesystem
-```
-
-With this config,
+The [Flysystem](https://flysystem.thephpleague.com) object for file input and output can also be created from option values in a `Jaxon\Config\Config` object.
+For the storage with id `uploads`, the `adapter`, `dir` and `options` values will be read in the `storage.stores.uploads` entry.
 
 ```php
-return [
-    'app' => [
-        'storage' => [
-            'adapters' => [
-                // Adapters options
-                'local' => [], // Optional
-            ]
-            'stores' => [
-                'uploads' => [
-                    'adapter' => 'local',
-                    'dir' => '/var/www/storage/uploads',
-                    // 'options' => [], // Optional
-                ],
+use Jaxon\Config\ConfigSetter;
+use function Jaxon\Storage\storage;
+
+// Set the storage config
+$setter = new ConfigSetter();
+$config = $setter->newConfig([
+    'storage' => [
+        'adapters' => [
+            // Adapters options
+            'local' => [], // Optional
+        ]
+        'stores' => [
+            'uploads' => [
+                'adapter' => 'local',
+                'dir' => '/var/www/storage/uploads',
+                // 'options' => [], // Optional
             ],
         ],
     ],
-];
+]);
+storage()->setConfig($config);
+
+// Write a file
+$storage = storage()->get('uploads');
+$storage->write('uploaded-file.txt', $uploadedContent)
 ```
 
-The code snippet below writes the given content in the `/var/www/storage/uploads/uploaded-file.txt` file, as in the previous example.
+The code snippet above writes the given content in the `/var/www/storage/uploads/uploaded-file.txt` file, as in the previous example.
 
 ```php
 use function Jaxon\Storage\storage;
@@ -152,24 +145,22 @@ $storage->write('uploaded-file.txt', $uploadedContent)
 Each adapter can also be defined as an alias of an already defined adapter.
 
 ```php
-return [
-    'app' => [
-        'storage' => [
-            'adapters' => [
-                // Adapters options
-                'uploads' => [
-                    'alias' => 'local',
-                    'options' => [], // Local adapter options for the uploads
-                ],
-                'exports' => [
-                    'alias' => 'local',
-                    'options' => [], // Local adapter options for the exports
-                ],
-            ]
+$config = $setter->newConfig([
+    'storage' => [
+        'adapters' => [
+            // Adapters options
+            'uploads' => [
+                'alias' => 'local',
+                'options' => [], // Local adapter options for the uploads
+            ],
+            'exports' => [
+                'alias' => 'local',
+                'options' => [], // Local adapter options for the exports
+            ],
         ],
         'stores' => [],
     ],
-];
+]);
 ```
 
 ## Using without the Jaxon library
@@ -190,36 +181,8 @@ storage()->translator()->setLocale('fr');
 
 #### The storage config options
 
-Without the Jaxon Core library, a call to the `storage()->get()` function will throw an exception due to missing config options.
-The library then needs to be provided with a closure which returns a `Jaxon\Config\Config` object populated with the config options.
-
-```php
-use Jaxon\Config\Config;
-use Jaxon\Config\ConfigSetter;
-use function Jaxon\Storage\storage;
-
-// Provide the config setter
-storage()->setConfigGetter(function(): Config {
-    $setter = new ConfigSetter();
-    return $setter->newConfig([
-        'adapters' => [
-            // Adapters options
-            'local' => [], // Optional
-        ],
-        'stores' => [
-            'uploads' => [
-                'adapter' => 'local',
-                'dir' => '/var/www/storage/uploads',
-                // 'options' => [], // Optional
-            ],
-        ],
-    ]);
-});
-
-// Usage
-$storage = storage()->get('uploads');
-$storage->write('uploaded-file.txt', $uploadedContent)
-```
+A call to the `storage()->get()` function will by default throw an exception due to missing config options.
+The library then needs to be provided with a `Jaxon\Config\Config` object populated with the config options, or a closure which returns one, using the `setConfig()` method.
 
 ## Register additional adapters
 
