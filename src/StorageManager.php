@@ -23,6 +23,7 @@ use Closure;
 
 use function count;
 use function dirname;
+use function is_a;
 use function is_array;
 use function is_string;
 
@@ -44,16 +45,25 @@ class StorageManager
     protected Config|null $xConfig = null;
 
     /**
+     * @var Closure|null
+     */
+    protected Closure|null $xConfigGetter = null;
+
+    /**
      * The constructor
      *
-     * @param Closure|null $xConfigGetter
+     * @param Config|Closure|null $xConfig
      * @param Translator|null $xTranslator
      */
-    public function __construct(private Closure|null $xConfigGetter = null,
+    public function __construct(Config|Closure|null $xConfig = null,
         protected Translator|null $xTranslator = null)
     {
         $this->registerDefaults();
 
+        if($xConfig !== null)
+        {
+            $this->setConfig($xConfig);
+        }
         if($xTranslator !== null)
         {
             $this->loadTranslations($xTranslator);
@@ -61,14 +71,18 @@ class StorageManager
     }
 
     /**
-     * @param Closure $xConfigGetter
+     * @param Config|Closure $xConfig
      *
-     * @return void
+     * @return self
      */
-    public function setConfigGetter(Closure $xConfigGetter): void
+    public function setConfig(Config|Closure $xConfig): self
     {
-        $this->xConfigGetter = $xConfigGetter;
         $this->xConfig = null;
+        $this->xConfigGetter = null;
+        is_a($xConfig, Config::class) ?
+            $this->xConfig = $xConfig : $this->xConfigGetter = $xConfig;
+
+        return $this;
     }
 
     /**
@@ -190,14 +204,13 @@ class StorageManager
         {
             return $this->xConfig;
         }
-
-        if($this->xConfigGetter === null)
+        if($this->xConfigGetter !== null)
         {
-            Logger::error("Jaxon Storage: No config getter set.");
-            throw new StorageException($this->translator()->trans('errors.storage.getter'));
+            return $this->xConfig = ($this->xConfigGetter)();
         }
 
-        return $this->xConfig = ($this->xConfigGetter)();
+        Logger::error("Jaxon Storage: No config getter set.");
+        throw new StorageException($this->translator()->trans('errors.storage.getter'));
     }
 
     /**

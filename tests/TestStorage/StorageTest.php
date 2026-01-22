@@ -61,8 +61,7 @@ class StorageTest extends TestCase
 
     private function setConfigOptions(array $aOptions, string $sPrefix = '')
     {
-        $this->xManager->setConfigGetter(fn(): Config =>
-            $this->xConfigSetter->newConfig($aOptions, $sPrefix));
+        $this->xManager->setConfig($this->xConfigSetter->newConfig($aOptions, $sPrefix));
     }
 
     /**
