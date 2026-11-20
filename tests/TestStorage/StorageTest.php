@@ -2,7 +2,6 @@
 
 namespace Jaxon\Storage\Tests\TestStorage;
 
-use Jaxon\Config\Config;
 use Jaxon\Config\ConfigSetter;
 use Jaxon\Storage\StorageException;
 use Jaxon\Storage\StorageManager;
@@ -80,7 +79,7 @@ class StorageTest extends TestCase
         $this->setConfigOptions([
             'adapters' => [
                 'files' => [
-                    'alias' => 'local',
+                    'driver' => 'local',
                     'options' => [
                         'lazyRootCreation' => false, // Create dirs if they don't exist.
                     ],
@@ -111,7 +110,7 @@ class StorageTest extends TestCase
         $this->setConfigOptions([
             'adapters' => [
                 'files' => [
-                    'alias' => 'local',
+                    'driver' => 'local',
                     'options' => [
                         'lazyRootCreation' => true, // Don't create dirs if they don't exist.
                     ],

@@ -32,12 +32,17 @@ class StorageManager
     /**
      * @var array<string, Closure>
      */
+    protected $aFactories = [];
+
+    /**
+     * @var array<string, array<string, array|string>>
+     */
     protected $aAdapters = [];
 
     /**
      * @var array
      */
-    private $aCurrentAdapter = [];
+    private array $aCurrentAdapter;
 
     /**
      * @var Config|null
@@ -58,7 +63,12 @@ class StorageManager
     public function __construct(Config|Closure|null $xConfig = null,
         protected Translator|null $xTranslator = null)
     {
-        $this->registerDefaults();
+        // Local file system adapter
+        $this->registerDriver('local', fn(string $sRootDir, array $aOptions) =>
+            new LocalFilesystemAdapter($sRootDir, ...$aOptions));
+        $this->registerAdapter('local', 'local');
+
+        $this->resetCurrentAdapter();
 
         if($xConfig !== null)
         {
@@ -71,6 +81,32 @@ class StorageManager
     }
 
     /**
+     * @param string $sAdapter
+     * @param array $aDriverOptions
+     *
+     * @return void
+     */
+    private function setCurrentAdapter(string $sAdapter, array $aDriverOptions): void
+    {
+        $aAdapter = $this->aAdapters[$sAdapter];
+        $this->aCurrentAdapter = [
+            ...$aAdapter,
+            'options' => [
+                ...($aAdapter['options'] ?? []),
+                ...$aDriverOptions,
+            ],
+        ];
+    }
+
+    /**
+     * @return void
+     */
+    private function resetCurrentAdapter(): void
+    {
+        $this->setCurrentAdapter('local', []);
+    }
+
+    /**
      * @param Config|Closure $xConfig
      *
      * @return self
@@ -80,7 +116,8 @@ class StorageManager
         $this->xConfig = null;
         $this->xConfigGetter = null;
         is_a($xConfig, Config::class) ?
-            $this->xConfig = $xConfig : $this->xConfigGetter = $xConfig;
+            $this->xConfig = $xConfig :
+            $this->xConfigGetter = $xConfig;
 
         return $this;
     }
@@ -117,57 +154,95 @@ class StorageManager
     }
 
     /**
-     * @param string $sAdapter
-     * @param Closure|string $xFactory
+     * @param string $sDriver
+     * @param Closure $xFactory
      *
      * @return void
      */
-    public function register(string $sAdapter, Closure|string $xFactory): void
+    public function registerDriver(string $sDriver, Closure $xFactory): void
+    {
+        $this->aFactories[$sDriver] ??= $xFactory;
+    }
+
+    /**
+     * @param string $sAdapter
+     * @param string $sDriver
+     * @param array $aDriverOptions
+     *
+     * @return void
+     */
+    public function registerAdapter(string $sAdapter,
+        string $sDriver, array $aDriverOptions = []): void
     {
         if(isset($this->aAdapters[$sAdapter]))
         {
             return;
         }
 
-        if(is_string($xFactory))
+        if(!isset($this->aFactories[$sDriver]))
         {
-            // The adapter is an alias.
-            if(!isset($this->aAdapters[$xFactory]))
-            {
-                Logger::error("Jaxon Storage: adapter '{$xFactory}' not configured.");
-                throw new StorageException($this->translator()->trans('errors.storage.adapter'));
-            }
-            $xFactory = $this->aAdapters[$xFactory];
+            Logger::error("Jaxon Storage: no driver '{$sDriver}' registered.");
+            throw new StorageException($this->translator()->trans('errors.storage.driver'));
         }
 
-        $this->aAdapters[$sAdapter] = $xFactory;
+        $this->aAdapters[$sAdapter] = [
+            'factory' => $this->aFactories[$sDriver],
+            'options' => $aDriverOptions,
+        ];
     }
 
     /**
-     * Register the file storage adapters
+     * Register a driver, and an adapter with the same name.
+     * This method is provided for compatibility with previous versions.
+     *
+     * @param string $sDriver
+     * @param Closure|string $xFactory
      *
      * @return void
      */
-    private function registerDefaults(): void
+    public function register(string $sDriver, Closure|string $xFactory): void
     {
-        // Local file system adapter
-        $this->register('local', fn(string $sRootDir, array $aOptions) =>
-            new LocalFilesystemAdapter($sRootDir, ...$aOptions));
+        if(!is_string($xFactory))
+        {
+            $this->registerDriver($sDriver, $xFactory);
+        }
+        $this->registerAdapter($sDriver, $sDriver);
     }
 
     /**
      * @param string $sAdapter
-     * @param array $aAdapterOptions
+     * @param array $aDriverOptions
      *
      * @return self
      */
-    public function adapter(string $sAdapter, array $aAdapterOptions = []): self
+    public function adapter(string $sAdapter, array $aDriverOptions = []): self
     {
-        $this->aCurrentAdapter = [
-            'adapter' => $sAdapter,
-            'options' => $aAdapterOptions,
-        ];
+        if(!isset($this->aAdapters[$sAdapter]))
+        {
+            Logger::error("Jaxon Storage: adapter '$sAdapter' not registered.");
+            throw new StorageException($this->translator()
+                ->trans('errors.storage.adapter'));
+        }
+
+        $this->setCurrentAdapter($sAdapter, $aDriverOptions);
         return $this;
+    }
+
+    /**
+     * @param string $sRootDir
+     * @param array $aOptions
+     *
+     * @return Filesystem
+     * @throws StorageException
+     */
+    public function dir(string $sRootDir, array $aOptions = []): Filesystem
+    {
+        $sAdapter = $this->aCurrentAdapter;
+        $this->resetCurrentAdapter();
+
+        // Make the adapter.
+        $xAdapter = $sAdapter['factory']($sRootDir, $sAdapter['options']);
+        return new Filesystem($xAdapter, ...$aOptions);
     }
 
     /**
@@ -179,19 +254,7 @@ class StorageManager
      */
     public function make(string $sRootDir, array $aOptions = []): Filesystem
     {
-        $sAdapter = $this->aCurrentAdapter['adapter'] ?? '';
-        if(!isset($this->aAdapters[$sAdapter]))
-        {
-            Logger::error("Jaxon Storage: adapter '$sAdapter' not configured.");
-            throw new StorageException($this->translator()->trans('errors.storage.adapter'));
-        }
-
-        // Make the adapter.
-        $xAdapter = $this->aAdapters[$sAdapter]($sRootDir, $this->aCurrentAdapter['options']);
-        // Reset the current adapter.
-        $this->aCurrentAdapter = [];
-
-        return new Filesystem($xAdapter, ...$aOptions);
+        return $this->dir($sRootDir, $aOptions);
     }
 
     /**
@@ -210,34 +273,36 @@ class StorageManager
         }
 
         Logger::error("Jaxon Storage: No config getter set.");
-        throw new StorageException($this->translator()->trans('errors.storage.getter'));
+        throw new StorageException($this->translator()
+            ->trans('errors.storage.getter'));
     }
 
     /**
      * @param string $sAdapter
      *
-     * @return self
+     * @return void
      */
-    private function setCurrentAdapter(string $sAdapter): self
+    private function configAdapter(string $sAdapter): void
     {
-        $xConfig = $this->config();
-
-        $aOptions = $xConfig->getOption("adapters.$sAdapter", []);
-        if(!is_array($aOptions))
+        if(!isset($this->aAdapters[$sAdapter]))
         {
-            Logger::error("Jaxon Storage: incorrect values in 'adapters.$sAdapter' options.");
-            throw new StorageException($this->translator()->trans('errors.storage.options'));
-        }
+            $xConfig = $this->config();
+            $aAdapter = $xConfig->getOption("adapters.$sAdapter");
+            $sDriver = $aAdapter['driver'] ?? null;
+            $aDriverOptions = $aAdapter['options'] ?? [];
+            if(!is_array($aAdapter) || count($aAdapter) !== 2 ||
+                !is_string($sDriver) || !is_array($aDriverOptions))
+            {
+                Logger::error("Jaxon Storage: incorrect values for adapter.", [
+                    'adapter' => $sAdapter,
+                    'options' => $aAdapter,
+                ]);
+                throw new StorageException($this->translator()
+                    ->trans('errors.storage.options'));
+            }
 
-        if(count($aOptions) === 2 &&
-            is_string($aOptions['alias'] ?? null) &&
-            is_array($aOptions['options'] ?? null))
-        {
-            $this->register($sAdapter, $aOptions['alias']);
-            $aOptions = $aOptions['options'];
+            $this->registerAdapter($sAdapter, $sDriver, $aDriverOptions);
         }
-
-        return $this->adapter($sAdapter, $aOptions);
     }
 
     /**
@@ -249,16 +314,21 @@ class StorageManager
     public function get(string $sOptionName): Filesystem
     {
         $xConfig = $this->config();
-
         $sAdapter = $xConfig->getOption("stores.$sOptionName.adapter");
         $sRootDir = $xConfig->getOption("stores.$sOptionName.dir");
         $aOptions = $xConfig->getOption("stores.$sOptionName.options", []);
         if(!is_string($sAdapter) || !is_string($sRootDir) || !is_array($aOptions))
         {
-            Logger::error("Jaxon Storage: incorrect values in 'stores.$sOptionName' options.");
-            throw new StorageException($this->translator()->trans('errors.storage.options'));
+            Logger::error("Jaxon Storage: incorrect values for store.", [
+                'store' => $sOptionName,
+                'options' => $xConfig->getOption("stores.$sOptionName"),
+            ]);
+            throw new StorageException($this->translator()
+                ->trans('errors.storage.options'));
         }
 
-        return $this->setCurrentAdapter($sAdapter)->make($sRootDir, $aOptions);
+        $this->configAdapter($sAdapter);
+
+        return $this->adapter($sAdapter)->make($sRootDir, $aOptions);
     }
 }

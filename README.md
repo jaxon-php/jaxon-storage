@@ -15,7 +15,7 @@ This package provides a tiny wrapper for file storage for the Jaxon library usin
 
 ## Features
 
-The library features are provided in the `Jaxon\Storage\StorageManager` class, which implements three functions.
+The library features are provided in the `Jaxon\Storage\StorageManager` class.
 
 Starting from version 1.1.0, a global function is available to get the instance of the storage manager.
 
@@ -23,23 +23,37 @@ Starting from version 1.1.0, a global function is available to get the instance 
 use function Jaxon\Storage\storage;
 ```
 
-This function creates and returns a static instance of the `Jaxon\Storage\StorageManager` class.
+It creates and returns a static instance of the `Jaxon\Storage\StorageManager` class.
 
 #### Register an adapter
 
-This function registers an adapter from the [Flysystem](https://flysystem.thephpleague.com) library.
+The first step is to register a [Flysystem](https://flysystem.thephpleague.com) adapter as a driver.
+
+```php
+    /**
+     * @param string $sDriver
+     * @param Closure $xFactory
+     *
+     * @return void
+     */
+    public function registerDriver(string $sDriver, Closure $xFactory): void
+```
+
+The first parameter is the driver id, and the second is a closure which takes a root dir and an array of options as parameters, and returns a `League\Flysystem\FilesystemAdapter` object for file input and output at the given location.
+
+An adapter then needs to be registered, by specifying a driver and the corresponding options.
 
 ```php
     /**
      * @param string $sAdapter
-     * @param Closure $cFactory
+     * @param string $sDriver
+     * @param array $aDriverOptions
      *
      * @return void
      */
-    public function register(string $sAdapter, Closure $cFactory)
+    public function registerAdapter(string $sAdapter,
+        string $sDriver, array $aDriverOptions = []): void
 ```
-
-The first parameter is the adapter id, and the second is a closure which takes a root dir and an optional array of options as parameters, and returns a `League\Flysystem\FilesystemAdapter` object configured for file input and output at the given location.
 
 By default, the library registers an adapter for the local filesystem.
 
@@ -48,40 +62,47 @@ use League\Flysystem\Local\LocalFilesystemAdapter;
 use function Jaxon\Storage\storage;
 
 // Local file system adapter
-storage()->register('local', function(string $sRootDir, array $aOptions) {
+storage()->registerDriver('local', function(string $sRootDir, array $aOptions) {
     return new LocalFilesystemAdapter($sRootDir, ...$aOptions);
 });
+storage()->registerAdapter('local', 'local');
 ```
 
-An adapter can be registered as an alias of an already registered one.
-This is useful for example for using the same adapter with different options.
+> Note: Starting from version 2.0, the use of aliases is removed.
+
+For compatibility with the 1.2 and prior releases, this function registers a driver and an adapter with the same name.
 
 ```php
-use function Jaxon\Storage\storage;
-
-// The "uploads" adapter is an alias of the local file system adapter
-storage()->register('uploads', 'local');
+    /**
+     * @param string $sAdapter
+     * @param Closure $xFactory
+     *
+     * @return void
+     */
+    public function register(string $sAdapter, Closure $xFactory): void
 ```
 
 #### Create a file input/output object
 
-A [Flysystem](https://flysystem.thephpleague.com) object for file input and output is created by chaining the `adapter()` and `make()` functions.
+A [Flysystem](https://flysystem.thephpleague.com) object for file input and output is created using the `adapter()` and `dir()` functions.
 
 ```php
 use function Jaxon\Storage\storage;
 
 $storage = storage()
     ->adapter('local')
-    ->make('/var/www/storage/uploads');
+    ->dir('/var/www/storage/uploads');
 $storage->write('uploaded-file.txt', $uploadedContent)
 ```
 
-The `adapter()` function takes the id of a registered adapter as parameter, while the `make()` function takes the path to the root dir.
+The `adapter()` function takes the id of a registered adapter as parameter, while the `dir()` function takes the path to the root dir.
+
+Without the call to `adapter()`, the `local` adapter is used by default.
 
 The code snippet below writes the given content in the `/var/www/storage/uploads/uploaded-file.txt` file.
 
-The adapter and directory options can be passed to the `adapter()` and `make()` functions.
-The adapter options are set on the adapter object (e.g `LocalFilesystemAdapter`), while the directory options are set on the returned `Filesystem` object. Their values are then described in their respective documentations.
+The adapter and directory options can be passed to the `adapter()` and `dir()` functions.
+The adapter options are merged with those defined in the call to `registerAdapter()`, set on the adapter object (e.g `LocalFilesystemAdapter`), while the directory options are set on the returned `Filesystem` object. Their values are then described in their respective documentations.
 
 ```php
 use function Jaxon\Storage\storage;
@@ -96,7 +117,7 @@ $aDirOptions = [
 ];
 $storage = storage()
     ->adapter('local', $aAdapterOptions)
-    ->make('/var/www/storage/uploads', $aDirOptions);
+    ->dir('/var/www/storage/uploads', $aDirOptions);
 $storage->write('uploaded-file.txt', $uploadedContent)
 ```
 
@@ -115,11 +136,14 @@ $config = $setter->newConfig([
     'storage' => [
         'adapters' => [
             // Adapters options
-            'local' => [], // Optional
+            'local' => [
+                'driver' => 'local', // Mandatory
+                'options' => [], // Optional
+            ],
         ]
         'stores' => [
             'uploads' => [
-                'adapter' => 'local',
+                'adapter' => 'local', // Mandatory
                 'dir' => '/var/www/storage/uploads',
                 // 'options' => [], // Optional
             ],
@@ -142,7 +166,7 @@ $storage = storage()->get('uploads');
 $storage->write('uploaded-file.txt', $uploadedContent)
 ```
 
-Each adapter can also be defined as an alias of an already defined adapter.
+Multiple adapters can use the same driver, but with different options.
 
 ```php
 $config = $setter->newConfig([
@@ -150,11 +174,11 @@ $config = $setter->newConfig([
         'adapters' => [
             // Adapters options
             'uploads' => [
-                'alias' => 'local',
+                'driver' => 'local',
                 'options' => [], // Local adapter options for the uploads
             ],
             'exports' => [
-                'alias' => 'local',
+                'driver' => 'local',
                 'options' => [], // Local adapter options for the exports
             ],
         ],
@@ -184,20 +208,27 @@ storage()->translator()->setLocale('fr');
 A call to the `storage()->get()` function will by default throw an exception due to missing config options.
 The library then needs to be provided with a `Jaxon\Config\Config` object populated with the config options, or a closure which returns one, using the `setConfig()` method.
 
-## Register additional adapters
+## Register additional drivers
 
-The [Flysystem](https://flysystem.thephpleague.com) library provides adapters for many other filesystems, which can be registered with this library.
+By default, an adapter is always registered for the local filesystem.
+The [Flysystem](https://flysystem.thephpleague.com) library provides adapters for many other filesystems, which need to be registered before they can be used.
 
 They are provided in separate packages, which need to be installed first.
 
 #### AWS S3 file system adapter
+
+https://flysystem.thephpleague.com/docs/adapter/aws-s3-v3/
+
+```php
+composer require league/flysystem-aws-s3-v3:^3.0
+```
 
 ```php
 use Aws\S3\S3Client;
 use League\Flysystem\AwsS3V3\AwsS3V3Adapter;
 use function Jaxon\Storage\storage;
 
-storage()->register('aws-s3', function(string $sRootDir, array $aOptions) {
+storage()->registerDriver('aws-s3', function(string $sRootDir, array $aOptions) {
     $client = new S3Client($aOptions['client'] ?? []);
     return new AwsS3V3Adapter($client, $aOptions['bucket'] ?? '', $sRootDir);
 });
@@ -205,12 +236,18 @@ storage()->register('aws-s3', function(string $sRootDir, array $aOptions) {
 
 #### Async AWS S3 file system adapter
 
+https://flysystem.thephpleague.com/docs/adapter/async-aws-s3/
+
+```php
+composer require league/flysystem-async-aws-s3:^3.0
+```
+
 ```php
 use AsyncAws\S3\S3Client;
 use League\Flysystem\AsyncAwsS3\AsyncAwsS3Adapter;
 use function Jaxon\Storage\storage;
 
-storage()->register('async-aws-s3', function(string $sRootDir, array $aOptions) {
+storage()->registerDriver('async-aws-s3', function(string $sRootDir, array $aOptions) {
     $client = isset($aOptions['client']) ? new S3Client($aOptions['client']) : new S3Client();
     return new AsyncAwsS3Adapter($client, $aOptions['bucket'] ?? '', $sRootDir);
 });
@@ -218,12 +255,18 @@ storage()->register('async-aws-s3', function(string $sRootDir, array $aOptions) 
 
 #### Google Cloud file system adapter
 
+https://flysystem.thephpleague.com/docs/adapter/google-cloud-storage/
+
+```php
+composer require league/flysystem-google-cloud-storage:^3.0
+```
+
 ```php
 use Google\Cloud\Storage\StorageClient;
 use League\Flysystem\AzureBlobStorage\GoogleCloudStorageAdapter;
 use function Jaxon\Storage\storage;
 
-storage()->register('google-cloud', function(string $sRootDir, array $aOptions) {
+storage()->registerDriver('google-cloud', function(string $sRootDir, array $aOptions) {
     $storageClient = new StorageClient($aOptions['client'] ?? []);
     $bucket = $storageClient->bucket($aOptions['bucket'] ?? '');
     return new GoogleCloudStorageAdapter($bucket, $sRootDir);
@@ -232,12 +275,18 @@ storage()->register('google-cloud', function(string $sRootDir, array $aOptions) 
 
 #### Microsoft Azure file system adapter
 
+https://flysystem.thephpleague.com/docs/adapter/azure-blob-storage/
+
+```php
+composer require league/flysystem-azure-blob-storage:^3.0
+```
+
 ```php
 use League\Flysystem\AzureBlobStorage\AzureBlobStorageAdapter;
 use MicrosoftAzure\Storage\Blob\BlobRestProxy;
 use function Jaxon\Storage\storage;
 
-storage()->register('azure-blob', function(string $sRootDir, array $aOptions) {
+storage()->registerDriver('azure-blob', function(string $sRootDir, array $aOptions) {
     $client = BlobRestProxy::createBlobService($aOptions['dsn']);
     return new AzureBlobStorageAdapter($client, $aOptions['container'], $sRootDir);
 });
@@ -245,12 +294,18 @@ storage()->register('azure-blob', function(string $sRootDir, array $aOptions) {
 
 #### FTP file system adapter
 
+https://flysystem.thephpleague.com/docs/adapter/ftp/
+
+```php
+composer require league/flysystem-ftp:^3.0
+```
+
 ```php
 use League\Flysystem\Ftp\FtpAdapter;
 use League\Flysystem\Ftp\FtpConnectionOptions;
 use function Jaxon\Storage\storage;
 
-storage()->register('ftp', function(string $sRootDir, array $aOptions) {
+storage()->registerDriver('ftp', function(string $sRootDir, array $aOptions) {
     $aOptions['root'] = $sRootDir;
     $xOptions = FtpConnectionOptions::fromArray($aOptions);
     return new FtpAdapter($xOptions);
@@ -259,12 +314,18 @@ storage()->register('ftp', function(string $sRootDir, array $aOptions) {
 
 #### SFTP V2 file system adapter
 
+https://flysystem.thephpleague.com/docs/adapter/sftp-v2/
+
+```php
+composer require league/flysystem-sftp:^3.0
+```
+
 ```php
 use League\Flysystem\PhpseclibV2\SftpAdapter;
 use League\Flysystem\PhpseclibV2\SftpConnectionProvider;
 use function Jaxon\Storage\storage;
 
-storage()->register('sftp-v2', function(string $sRootDir, array $aOptions) {
+storage()->registerDriver('sftp-v2', function(string $sRootDir, array $aOptions) {
     $provider = new SftpConnectionProvider(...$aOptions);
     return new SftpAdapter($provider, $sRootDir);
 });
@@ -272,12 +333,18 @@ storage()->register('sftp-v2', function(string $sRootDir, array $aOptions) {
 
 #### SFTP V3 file system adapter
 
+https://flysystem.thephpleague.com/docs/adapter/sftp-v3/
+
+```php
+composer require league/flysystem-sftp-v3:^3.0
+```
+
 ```php
 use League\Flysystem\PhpseclibV3\SftpAdapter;
 use League\Flysystem\PhpseclibV3\SftpConnectionProvider;
 use function Jaxon\Storage\storage;
 
-storage()->register('sftp-v3', function(string $sRootDir, array $aOptions) {
+storage()->registerDriver('sftp-v3', function(string $sRootDir, array $aOptions) {
     $provider = new SftpConnectionProvider(...$aOptions);
     return new SftpAdapter($provider, $sRootDir);
 });
